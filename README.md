@@ -1,2 +1,2 @@
 # AI Internship
-Mera AI internship ka progress yahan hoga.
+My AI internship progress is here.
