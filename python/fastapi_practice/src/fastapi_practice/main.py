@@ -1,35 +1,54 @@
+import os
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-import asyncio
+from sqlmodel import SQLModel, Field, Session, create_engine, select
 
-app = FastAPI()
+# .env file se DATABASE_URL load karna
+load_dotenv()
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-class Student(BaseModel):
+# Database engine banana (connection setup)
+engine = create_engine(DATABASE_URL)
+
+# Table define karna (SQLModel class se)
+class Student(SQLModel, table=True):
+    id: int = Field(default=None, primary_key=True)
     name: str
     age: int
     email: str
 
-# Fake database (practice ke liye)
-students_db = {}
+app = FastAPI()
+
+# App start hote hi table create karo (agar na ho)
+@app.on_event("startup")
+def on_startup():
+    SQLModel.metadata.create_all(engine)
 
 @app.get("/")
 def read_root():
     return {"message": "Hello, World!"}
 
-# POST - status code 201 (Created)
-@app.post("/students/{student_id}", status_code=201)
-def create_student(student_id: int, student: Student):
-    students_db[student_id] = student
-    return {"message": f"Student {student.name} created successfully"}
+# Naya student database mein add karna
+@app.post("/students", status_code=201)
+def create_student(student: Student):
+    with Session(engine) as session:
+        session.add(student)
+        session.commit()
+        session.refresh(student)
+        return student
 
-# GET - agar student na mile to 404 error
+# Saare students database se nikalna
+@app.get("/students")
+def get_all_students():
+    with Session(engine) as session:
+        students = session.exec(select(Student)).all()
+        return students
+
+# Ek specific student nikalna
 @app.get("/students/{student_id}")
 def get_student(student_id: int):
-    if student_id not in students_db:
-        raise HTTPException(status_code=404, detail="Student not found")
-    return students_db[student_id]
-
-@app.get("/async-test")
-async def async_test():
-    await asyncio.sleep(5)
-    return {"message": "This was async Waited 5 seconds without blocking."}
+    with Session(engine) as session:
+        student = session.get(Student, student_id)
+        if not student:
+            raise HTTPException(status_code=404, detail="Student not found")
+        return student
