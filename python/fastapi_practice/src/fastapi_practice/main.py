@@ -1,25 +1,24 @@
 import os
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from sqlmodel import SQLModel, Field, Session, create_engine, select
 
-# .env file se DATABASE_URL load karna
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
-
-# Database engine banana (connection setup)
 engine = create_engine(DATABASE_URL)
 
-# Table define karna (SQLModel class se)
 class Student(SQLModel, table=True):
     id: int = Field(default=None, primary_key=True)
     name: str
     age: int
     email: str
 
+# YAHAN app banta hai — ye sabse pehle hona chahiye baaki endpoints se
 app = FastAPI()
 
-# App start hote hi table create karo (agar na ho)
+# Secret key
+API_KEY = "mysecretkey123"
+
 @app.on_event("startup")
 def on_startup():
     SQLModel.metadata.create_all(engine)
@@ -28,7 +27,6 @@ def on_startup():
 def read_root():
     return {"message": "Hello, World!"}
 
-# Naya student database mein add karna
 @app.post("/students", status_code=201)
 def create_student(student: Student):
     with Session(engine) as session:
@@ -37,14 +35,12 @@ def create_student(student: Student):
         session.refresh(student)
         return student
 
-# Saare students database se nikalna
 @app.get("/students")
 def get_all_students():
     with Session(engine) as session:
         students = session.exec(select(Student)).all()
         return students
 
-# Ek specific student nikalna
 @app.get("/students/{student_id}")
 def get_student(student_id: int):
     with Session(engine) as session:
@@ -52,3 +48,10 @@ def get_student(student_id: int):
         if not student:
             raise HTTPException(status_code=404, detail="Student not found")
         return student
+
+# Naya endpoint - ye bhi app define hone ke BAAD hona chahiye
+@app.get("/protected")
+def protected_route(x_api_key: str = Header(None)):
+    if x_api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid API Key")
+    return {"message": "You have access to protected data!"}
