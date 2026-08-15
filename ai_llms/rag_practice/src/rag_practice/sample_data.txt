@@ -1,0 +1,13 @@
+Habib ek software engineer hai jo Lahore mein rehta hai. Uski age 25 saal hai.
+Habib ne apni degree Punjab University se ki hai, Computer Science mein.
+Habib ka favorite programming language Python hai.
+Habib weekend mein cricket khelna pasand karta hai.
+
+Company XYZ Lahore mein based hai aur ye ek software house hai.
+Company XYZ ki foundation 2015 mein hui thi.
+Company mein currently 50 employees kaam karte hain.
+Company ke CEO ka naam UqbaHabib hai.
+
+Leave Policy: Har employee ko saal mein 20 din ki paid leave milti hai.
+Sick leave alag se 10 din milti hai.
+Leave application HR department ko email karke submit karni hoti hai.
