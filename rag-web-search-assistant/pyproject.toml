@@ -1,0 +1,26 @@
+[project]
+name = "rag-web-search-assistant"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Habib-ur-Rehman",email = "habibhr112211@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "streamlit (>=1.61.1,<2.0.0)",
+    "chromadb (>=1.5.9,<2.0.0)",
+    "pypdf (>=6.16.1,<7.0.0)",
+    "beautifulsoup4 (>=4.15.0,<5.0.0)",
+    "requests (>=2.34.2,<3.0.0)",
+    "youtube-transcript-api (>=1.2.4,<2.0.0)",
+    "google-genai (>=2.18.1,<3.0.0)",
+    "python-dotenv (>=1.2.3,<2.0.0)"
+]
+
+[tool.poetry]
+packages = [{include = "rag_web_search_assistant", from = "src"}]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
