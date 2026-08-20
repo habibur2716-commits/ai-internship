@@ -7,6 +7,7 @@ import requests
 from pypdf import PdfReader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from bs4 import BeautifulSoup
 
 # ============ PAGE CONFIG ============
 st.set_page_config(page_title="RAG Web Search Assistant", page_icon="🔍", layout="wide")
@@ -60,6 +61,18 @@ def process_and_store(text, source_name, collection):
         )
 
     return len(chunks)
+
+def fetch_webpage(url):
+    response = requests.get(url, timeout=10)
+    response.raise_for_status()
+    return response.text
+
+def extract_readable_text(html):
+    soup = BeautifulSoup(html, "html.parser")
+    for tag in soup(["script", "style", "nav", "header", "footer", "aside"]):
+        tag.decompose()
+    text = soup.get_text(separator=" ")
+    return text
 
 # ============ SIDEBAR (PHASE 1 + 2) ============
 with st.sidebar:
@@ -148,7 +161,30 @@ with tab1:
             st.success(f"✅ Done! {total_chunks} chunks created from {len(uploaded_files)} file(s)")
 
 with tab2:
-    st.write("Web Content - Coming Soon")
+    st.header("🌐 Web Content")
+    
+    if not st.session_state.initialized:
+        st.warning("First, initialize the APIs from the sidebar.")
+    else:
+        url_input = st.text_input("Website URL")
+        
+        if st.button("Process URL"):
+            if not url_input:
+                st.error("Enter the URL first")
+            else:
+                try:
+                    with st.spinner("Fetching page..."):
+                        html = fetch_webpage(url_input)
+                        raw_text = extract_readable_text(html)
+                        clean = clean_text(raw_text)
+                        chunk_count = process_and_store(clean, url_input, st.session_state.collection)
+                    
+                    st.success(f"✅ Done! {chunk_count} chunks created from this URL")
+                
+                except requests.exceptions.RequestException as e:
+                    st.error(f"Could not fetch the URL: {str(e)}")
+                except Exception as e:
+                    st.error(f"There was an issue:{str(e)}")
 
 with tab3:
     st.write("YouTube - Coming Soon")
