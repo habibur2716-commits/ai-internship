@@ -8,6 +8,7 @@ from pypdf import PdfReader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from bs4 import BeautifulSoup
+from youtube_transcript_api import YouTubeTranscriptApi
 
 # ============ PAGE CONFIG ============
 st.set_page_config(page_title="RAG Web Search Assistant", page_icon="🔍", layout="wide")
@@ -73,6 +74,25 @@ def extract_readable_text(html):
         tag.decompose()
     text = soup.get_text(separator=" ")
     return text
+
+def extract_video_id(url):
+    patterns = [
+        r'(?:v=|\/)([0-9A-Za-z_-]{11}).*',
+        r'youtu\.be\/([0-9A-Za-z_-]{11})'
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    return None
+
+def fetch_youtube_transcript(video_id):
+    ytt_api = YouTubeTranscriptApi()
+    transcript_list = ytt_api.fetch(video_id)
+    full_text = " ".join([entry.text for entry in transcript_list])
+    return full_text
+
+
 
 # ============ SIDEBAR (PHASE 1 + 2) ============
 with st.sidebar:
@@ -187,7 +207,32 @@ with tab2:
                     st.error(f"There was an issue:{str(e)}")
 
 with tab3:
-    st.write("YouTube - Coming Soon")
+    st.header("🎥 YouTube")
+    
+    if not st.session_state.initialized:
+        st.warning("First, initialize the APIs from the sidebar.")
+    else:
+        yt_url = st.text_input("YouTube Video URL")
+        
+        if st.button("Process Video"):
+            if not yt_url:
+                st.error("Enter the URL first.")
+            else:
+                try:
+                    with st.spinner("Fetching transcript..."):
+                        video_id = extract_video_id(yt_url)
+                        
+                        if not video_id:
+                            st.error("Not a valid YouTube URL.")
+                        else:
+                            transcript_text = fetch_youtube_transcript(video_id)
+                            clean = clean_text(transcript_text)
+                            chunk_count = process_and_store(clean, yt_url, st.session_state.collection)
+                            
+                            st.success(f"✅ Done! {chunk_count} chunks created from this video")
+                
+                except Exception as e:
+                    st.error(f"Transcript could not be found: {str(e)}")
 
 with tab4:
     st.write("Chat - Coming Soon")
