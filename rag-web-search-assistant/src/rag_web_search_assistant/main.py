@@ -1,4 +1,5 @@
 import streamlit as st
+import time
 import os
 import re
 import chromadb
@@ -30,6 +31,8 @@ if "gemini_client" not in st.session_state:
 if "collection" not in st.session_state:
     chroma_client = chromadb.PersistentClient(path="./chroma_data")
     st.session_state.collection = chroma_client.get_or_create_collection("knowledge_base")
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
 
 # ============ HELPER FUNCTIONS (PHASE 3) ============
 def extract_text_from_pdf(uploaded_file):
@@ -44,6 +47,7 @@ def clean_text(text):
     text = text.strip()
     return text
 
+
 def process_and_store(text, source_name, collection):
     splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     chunks = splitter.split_text(text)
@@ -57,14 +61,19 @@ def process_and_store(text, source_name, collection):
         embedding = embeddings_model.embed_query(chunk)
         collection.add(
             embeddings=[embedding],
+            documents=[chunk],
             metadatas=[{"source": source_name, "chunk_index": i}],
             ids=[f"{source_name}_chunk_{i}"]
         )
+        time.sleep(0.7)  # ← Ye line add ki, har request ke beech thoda wait
 
     return len(chunks)
 
 def fetch_webpage(url):
-    response = requests.get(url, timeout=10)
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+    }
+    response = requests.get(url, headers=headers, timeout=10)
     response.raise_for_status()
     return response.text
 
@@ -91,6 +100,51 @@ def fetch_youtube_transcript(video_id):
     transcript_list = ytt_api.fetch(video_id)
     full_text = " ".join([entry.text for entry in transcript_list])
     return full_text
+
+def retrieve_relevant_chunks(query, collection, n_results=4):
+    embeddings_model = GoogleGenerativeAIEmbeddings(
+        model="models/gemini-embedding-001",
+        google_api_key=st.session_state.llm_api_key
+    )
+    query_embedding = embeddings_model.embed_query(query)
+    
+    results = collection.query(
+        query_embeddings=[query_embedding],
+        n_results=n_results
+    )
+    return results
+
+#=====phase 7
+def search_web(query, serper_key, num_results=3):
+    headers = {
+        "X-API-KEY": serper_key,
+        "Content-Type": "application/json"
+    }
+    payload = {"q": query}
+    
+    response = requests.post("https://google.serper.dev/search", headers=headers, json=payload)
+    response.raise_for_status()
+    data = response.json()
+    
+    results = []
+    if "organic" in data:
+        for item in data["organic"][:num_results]:
+            title = item.get("title", "")
+            snippet = item.get("snippet", "")
+            link = item.get("link", "")
+            results.append({"title": title, "snippet": snippet, "link": link})
+    
+    return results
+
+def format_web_results(results):
+    if not results:
+        return ""
+    
+    formatted = ""
+    for r in results:
+        formatted += f"Title: {r['title']}\nSnippet: {r['snippet']}\nSource: {r['link']}\n\n"
+    
+    return formatted
 
 
 
@@ -235,4 +289,84 @@ with tab3:
                     st.error(f"Transcript could not be found: {str(e)}")
 
 with tab4:
-    st.write("Chat - Coming Soon")
+    st.header("💬 Chat")
+    
+    if not st.session_state.initialized:
+        st.warning("First, initialize the APIs from the sidebar.")
+    else:
+        default_web_search = bool(st.session_state.get("serper_api_key"))
+        enable_web_search = st.checkbox("🌐 Enable web search", value=default_web_search)
+
+        if "chat_history" not in st.session_state:
+            st.session_state.chat_history = []
+        
+        # Purani conversation dikhana
+        for message in st.session_state.chat_history:
+            with st.chat_message(message["role"]):
+                st.write(message["content"])
+        
+        # Naya message input
+        user_question = st.chat_input("Ask your question...")
+        
+        if user_question:
+            with st.chat_message("user"):
+                st.write(user_question)
+            st.session_state.chat_history.append({"role": "user", "content": user_question})
+    
+            with st.chat_message("assistant"):
+                with st.spinner("I am thinking..."):
+                    try:
+                        count = st.session_state.collection.count()
+                
+                        # Document context nikalna
+                        doc_context = ""
+                        sources = []
+                        if count > 0:
+                            results = retrieve_relevant_chunks(user_question, st.session_state.collection)
+                            retrieved_texts = results["documents"][0]
+                            retrieved_metadatas = results["metadatas"][0]
+                            doc_context = "\n\n".join(retrieved_texts)
+                            sources = list(set([meta["source"] for meta in retrieved_metadatas]))
+                
+                        # Web search context nikalna (agar enabled hai)
+                        web_context = ""
+                        web_links = []
+                        if enable_web_search and st.session_state.get("serper_api_key"):
+                            try:
+                                web_results = search_web(user_question, st.session_state.serper_api_key)
+                                web_context = format_web_results(web_results)
+                                web_links = [r["link"] for r in web_results]
+                            except Exception as e:
+                                st.warning(f"Web search fail : {str(e)}")
+                
+                        # Check karo koi context mila bhi ya nahi
+                        if not doc_context and not web_context:
+                            answer = "I couldn't find any information to answer this question. Please upload the documents first or perform a web search."
+                        else:
+                            final_prompt = f"""Answer the question using the provided context. The context may come from two sources: your documents and a live web search. Use both to provide the best possible answer.
+
+        From your documents:
+        {doc_context if doc_context else "(No document context found.)"}
+
+        From the web:
+        {web_context if web_context else "(Web search was not enabled, or nothing was found.)"}
+
+        Sawal: {user_question}
+        """
+                            response = st.session_state.gemini_client.models.generate_content(
+                                model="gemini-3.6-flash",
+                                contents=final_prompt
+                            )
+                            answer = response.text
+                
+                        st.write(answer)
+                
+                        if sources:
+                            st.caption("📚 From your documents: " + ", ".join(sources))
+                        if web_links:
+                            st.caption("🌐 From the web: " + ", ".join(web_links))
+                
+                        st.session_state.chat_history.append({"role": "assistant", "content": answer})
+            
+                    except Exception as e:
+                        st.error(f"Error: {str(e)}")
