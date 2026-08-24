@@ -18,6 +18,53 @@ st.markdown("""
 <style>
     .main { padding: 2rem; }
     h1 { color: #4A90D9; }
+    
+    /* Title sticky top */
+    .stAppViewContainer .main .block-container {
+        padding-top: 1rem !important;
+    }
+    
+    [data-testid="stVerticalBlock"] > [data-testid="stVerticalBlock"]:first-child {
+        position: sticky;
+        top: 0;
+        background-color: #0e1117;
+        z-index: 997;
+        padding-bottom: 0.5rem;
+    }
+    
+    /* Tabs sticky top */
+    [data-testid="stTabs"] {
+        position: sticky;
+        top: 0;
+        background-color: #0e1117;
+        z-index: 998;
+        padding-top: 0.5rem;
+        padding-bottom: 0.5rem;
+    }
+    
+    /* Chat input fixed bottom */
+    .stChatInput {
+        position: fixed;
+        bottom: 0;
+        right: 0;
+        left: 0;
+        padding: 1rem 2rem;
+        background-color: #0e1117;
+        z-index: 999;
+        border-top: 1px solid #2d2d2d;
+        transition: left 0.3s ease;
+    }
+    
+    /* Sidebar khula ho to left shift */
+    [data-testid="stSidebar"][aria-expanded="true"] ~ .main .stChatInput,
+    [data-testid="stSidebar"][aria-expanded="true"] ~ * .stChatInput {
+        left: 300px;
+    }
+    
+    /* Chat messages ke liye padding */
+    [data-testid="stChatMessageContainer"] {
+        padding-bottom: 100px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -36,11 +83,25 @@ if "chat_history" not in st.session_state:
 
 # ============ HELPER FUNCTIONS (PHASE 3) ============
 def extract_text_from_pdf(uploaded_file):
-    reader = PdfReader(uploaded_file)
-    text = ""
-    for page in reader.pages:
-        text += page.extract_text() + "\n"
-    return text
+    try:
+        reader = PdfReader(uploaded_file)
+        
+        if len(reader.pages) == 0:
+            raise ValueError("There are no pages in the PDF.")
+        
+        text = ""
+        for page in reader.pages:
+            page_text = page.extract_text()
+            if page_text:
+                text += page_text + "\n"
+        
+        if not text.strip():
+            raise ValueError("No text could be extracted from the PDF — it is likely a scanned or image-based PDF.")
+        
+        return text
+    
+    except Exception as e:
+        raise Exception(f"PDF processing error: {str(e)}")
 
 def clean_text(text):
     text = re.sub(r'\s+', ' ', text)
@@ -70,12 +131,23 @@ def process_and_store(text, source_name, collection):
     return len(chunks)
 
 def fetch_webpage(url):
+    if not url.startswith(("http://", "https://")):
+        raise ValueError("Not a valid URL — must start with 'http://'")
+    
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
     }
-    response = requests.get(url, headers=headers, timeout=10)
-    response.raise_for_status()
-    return response.text
+    
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        return response.text
+    except requests.exceptions.Timeout:
+        raise Exception("The website did not respond within 10 seconds — Timeout.")
+    except requests.exceptions.ConnectionError:
+        raise Exception("Could not access the website — check your internet connection or the URL is incorrect.")
+    except requests.exceptions.HTTPError as e:
+        raise Exception(f"The website granted access: {str(e)}")
 
 def extract_readable_text(html):
     soup = BeautifulSoup(html, "html.parser")
@@ -96,10 +168,24 @@ def extract_video_id(url):
     return None
 
 def fetch_youtube_transcript(video_id):
-    ytt_api = YouTubeTranscriptApi()
-    transcript_list = ytt_api.fetch(video_id)
-    full_text = " ".join([entry.text for entry in transcript_list])
-    return full_text
+    try:
+        ytt_api = YouTubeTranscriptApi()
+        transcript_list = ytt_api.fetch(video_id)
+        
+        if not transcript_list:
+            raise ValueError("The transcript is empty.")
+        
+        full_text = " ".join([entry.text for entry in transcript_list])
+        return full_text
+    
+    except Exception as e:
+        error_msg = str(e).lower()
+        if "no transcript" in error_msg or "could not retrieve" in error_msg:
+            raise Exception("Is video ka transcript available nahi hai — ya to private hai, ya transcript disabled hai")
+        elif "video unavailable" in error_msg:
+            raise Exception("Ye video available nahi hai — deleted ya private ho sakta hai")
+        else:
+            raise Exception(f"Transcript fetch error: {str(e)}")
 
 def retrieve_relevant_chunks(query, collection, n_results=4):
     embeddings_model = GoogleGenerativeAIEmbeddings(
@@ -161,6 +247,14 @@ with st.sidebar:
     st.subheader("Status")
     status_placeholder = st.empty()
 
+    st.divider()
+    if st.session_state.initialized:
+        st.session_state.web_search_enabled = st.checkbox(
+            "🌐 Enable web search",
+            value=bool(st.session_state.get("serper_api_key")),
+            key="web_search_checkbox"
+        )
+
     if init_button:
         st.session_state.llm_api_key = llm_api_key
         st.session_state.serper_api_key = serper_api_key
@@ -172,7 +266,7 @@ with st.sidebar:
             try:
                 test_client = genai.Client(api_key=llm_api_key)
                 test_response = test_client.models.generate_content(
-                    model="gemini-3.6-flash",
+                    model="models/gemini-3.5-flash-lite",
                     contents="Hi"
                 )
                 st.session_state.gemini_client = test_client
@@ -219,20 +313,39 @@ with tab1:
         uploaded_files = st.file_uploader("Upload PDF files", type=["pdf"], accept_multiple_files=True)
 
         if uploaded_files and st.button("Process PDFs"):
+    
+            # Size check — 10MB se bara file warn karo
+            for file in uploaded_files:
+                if file.size > 10 * 1024 * 1024:  # 10MB
+                    st.warning(f"⚠️ '{file.name}' bohot bara hai ({file.size // (1024*1024)}MB) — processing slow ho sakti hai")
+    
             progress_bar = st.progress(0)
             total_chunks = 0
-
+            errors = []
+    
             for idx, file in enumerate(uploaded_files):
-                st.write(f"Processing: {file.name}")
-
-                raw_text = extract_text_from_pdf(file)
-                clean = clean_text(raw_text)
-                chunk_count = process_and_store(clean, file.name, st.session_state.collection)
-
-                total_chunks += chunk_count
+                try:
+                    st.write(f"Processing: {file.name}...")
+                    raw_text = extract_text_from_pdf(file)
+                    clean = clean_text(raw_text)
+            
+                    if len(clean) < 50:
+                       st.warning(f"'{file.name}' mein bohot kam text hai — skip kar raha hoon")
+                       continue
+            
+                    chunk_count = process_and_store(clean, file.name, st.session_state.collection)
+                    total_chunks += chunk_count
+                except Exception as e:
+                    errors.append(f"{file.name}: {str(e)}")
+           
                 progress_bar.progress((idx + 1) / len(uploaded_files))
-
-            st.success(f"✅ Done! {total_chunks} chunks created from {len(uploaded_files)} file(s)")
+    
+            if errors:
+                for err in errors:
+                    st.error(f"❌ {err}")
+    
+            if total_chunks > 0:
+                st.success(f"✅ Done! {total_chunks} chunks created from {len(uploaded_files) - len(errors)} file(s)")
 
 with tab2:
     st.header("🌐 Web Content")
@@ -294,9 +407,6 @@ with tab4:
     if not st.session_state.initialized:
         st.warning("First, initialize the APIs from the sidebar.")
     else:
-        default_web_search = bool(st.session_state.get("serper_api_key"))
-        enable_web_search = st.checkbox("🌐 Enable web search", value=default_web_search)
-
         if "chat_history" not in st.session_state:
             st.session_state.chat_history = []
         
@@ -316,6 +426,7 @@ with tab4:
             with st.chat_message("assistant"):
                 with st.spinner("I am thinking..."):
                     try:
+                        enable_web_search = st.session_state.get("web_search_enabled", False)
                         count = st.session_state.collection.count()
                 
                         # Document context nikalna
@@ -331,6 +442,7 @@ with tab4:
                         # Web search context nikalna (agar enabled hai)
                         web_context = ""
                         web_links = []
+                        
                         if enable_web_search and st.session_state.get("serper_api_key"):
                             try:
                                 web_results = search_web(user_question, st.session_state.serper_api_key)
@@ -354,14 +466,14 @@ with tab4:
         Sawal: {user_question}
         """
                             response = st.session_state.gemini_client.models.generate_content(
-                                model="gemini-3.6-flash",
+                                model="models/gemini-3.5-flash-lite",
                                 contents=final_prompt
                             )
                             answer = response.text
                 
                         st.write(answer)
                 
-                        if sources:
+                        if doc_context and sources:
                             st.caption("📚 From your documents: " + ", ".join(sources))
                         if web_links:
                             st.caption("🌐 From the web: " + ", ".join(web_links))
@@ -369,4 +481,12 @@ with tab4:
                         st.session_state.chat_history.append({"role": "assistant", "content": answer})
             
                     except Exception as e:
-                        st.error(f"Error: {str(e)}")
+                        error_msg = str(e)
+                        if "503" in error_msg or "UNAVAILABLE" in error_msg:
+                            st.error("⚠️ Gemini API abhi busy hai — thodi der baad dobara try karo")
+                        elif "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
+                            st.error("⚠️ API rate limit ho gayi — 1-2 minute wait karo phir try karo")
+                        elif "401" in error_msg or "403" in error_msg:
+                            st.error("⚠️ API key expire ya invalid ho gayi — sidebar se dobara initialize karo")
+                        else:
+                            st.error(f"❌ Error: {error_msg}")
