@@ -1,0 +1,12 @@
+# General
+venv/
+.env
+__pycache__/
+*.pyc
+*.pdf
+
+# Resume Enhancement System specific
+resume-enhancement-system/venv/
+resume-enhancement-system/.env
+resume-enhancement-system/uploaded_resume.pdf
+resume-enhancement-system/candidate_resume.txt
