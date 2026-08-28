@@ -5,6 +5,7 @@ import requests
 from PyPDF2 import PdfReader
 from fpdf import FPDF
 from dotenv import load_dotenv
+from urllib.parse import urlparse
 
 from agents.crew_setup import build_crew
 
@@ -67,6 +68,25 @@ def extract_resume_text(uploaded_file):
         f.write(text)
 
     return text, temp_path
+
+def is_valid_job_url(url):
+    """Checks if the given string is a well-formed http/https URL."""
+    try:
+        result = urlparse(url)
+        return all([result.scheme in ("http", "https"), result.netloc])
+    except Exception:
+        return False
+
+def is_valid_pdf(uploaded_file):
+    """Checks if the uploaded file is a real, parseable PDF (not corrupt)."""
+    try:
+        uploaded_file.seek(0)
+        reader = PdfReader(uploaded_file)
+        _ = len(reader.pages)  # forces PyPDF2 to actually parse the structure
+        uploaded_file.seek(0)  # reset pointer so later code can read it again
+        return True
+    except Exception:
+        return False    
 
 
 def cleanup_temp_files():
@@ -148,6 +168,10 @@ run_button = st.button("Generate Resume Improvement Plan")
 if run_button:
     if not job_url or not resume_file:
         st.error("Please provide both a job URL and a resume PDF.")
+    elif not is_valid_job_url(job_url):
+        st.error("That doesn't look like a valid URL. Please enter a full link starting with http:// or https://")
+    elif not is_valid_pdf(resume_file):
+        st.error("This file doesn't look like a valid PDF. Please upload a proper, non-corrupted PDF resume.")
     elif not gemini_api_key or not serper_api_key:
         st.error("Missing API key(s). Please add them in the sidebar or your .env file.")
     else:

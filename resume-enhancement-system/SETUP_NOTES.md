@@ -71,3 +71,46 @@ _(add roughly how long Phase 1 took you, e.g. "~1 day including debugging")_
 - No input validation yet for bad URLs / non-PDF uploads (Phase 2).
 - PDF has no formatting (headings, bold) — plain text only (Phase 5).
 - Only tested against one job posting and one resume so \sfar — broader testing is Phase 3.\s
+
+
+---
+
+## Phase 2 — Dependency & Configuration (Complete)
+
+### What Was Done
+1. Checked `requirements.txt` and removed packages we don't use anymore: `langchain-openai`,
+   `langchain-core`, `langchain-protocol`, `langsmith`. These were only needed when we were
+   using OpenAI. Since we switched to Gemini using `crewai.LLM`, they are not needed.
+2. Created a new file `.env.example`. It only lists the variable names (`GEMINI_API_KEY`,
+   `SERPER_API_KEY`) with no real values. This helps anyone else know which keys they need,
+   without seeing our actual secret keys.
+3. Checked that API keys already work both ways — from the `.env` file, or from the sidebar
+   if someone types a key manually. This part was already working from Phase 1.
+4. Added two new checks before running the app:
+   - Check if the job URL looks like a real URL (not random text).
+   - Check if the uploaded file is actually a working PDF, not a broken or fake one.
+   If either check fails, the app now shows a clear error message instead of crashing.
+5. Tested what happens if something fails in the middle (used a wrong API key on purpose).
+   Confirmed the temp files (`uploaded_resume.pdf`, `candidate_resume.txt`) still get deleted
+   even when there is an error.
+6. Did a full test in a brand new environment: made a new venv, installed only from
+   `requirements.txt` (no manual fixes), and ran the app successfully from start to finish.
+   This proves the project will work for anyone who clones it fresh.
+
+### Problems Faced
+
+#### Wrong Virtual Environment Was Active (Happened Twice)
+- A couple of times, the terminal was actually using a *different* venv than the project's
+  own one — once because an extra `.venv` folder got created by mistake, and once because
+  an old terminal session was still using the parent folder's venv.
+- How I noticed: got a "module not found" error for a package that was definitely installed.
+- Fix: always check the environment name shown in the terminal matches the project's own
+  `venv` folder. Deleted the extra `.venv` folder so this doesn't happen again.
+
+### Result
+The app now has clean, correct dependencies, clear setup instructions for API keys, and
+does not crash on bad input. Cleanup works correctly even when something goes wrong.
+
+### Still Left for Later Phases
+- Only tested with one job site and one resume so far. Testing with more job sites and
+  different resume formats is part of Phase 3.
