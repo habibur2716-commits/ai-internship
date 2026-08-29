@@ -39,17 +39,29 @@ serper_api_key = serper_key_input or os.getenv("SERPER_API_KEY")
 # ---------------- HELPER FUNCTIONS ----------------
 
 def scrape_job_posting(url, api_key):
-    """Uses Serper's scrape endpoint to fetch job posting page content."""
+    """Uses Serper's scrape endpoint to fetch job posting page content.
+    Returns (text, error_message). If successful, error_message is None."""
     endpoint = "https://scrape.serper.dev"
     headers = {
         "X-API-KEY": api_key,
         "Content-Type": "application/json",
     }
     payload = {"url": url}
-    response = requests.post(endpoint, headers=headers, json=payload)
-    response.raise_for_status()
-    data = response.json()
-    return data.get("text", "")
+    try:
+        response = requests.post(endpoint, headers=headers, json=payload, timeout=20)
+        response.raise_for_status()
+        data = response.json()
+        text = data.get("text", "")
+
+        if not text or len(text.strip()) < 100:
+            return None, "The scraper couldn't extract enough content from this page."
+
+        return text, None
+
+    except requests.exceptions.Timeout:
+        return None, "The job site took too long to respond (timeout)."
+    except requests.exceptions.RequestException as e:
+        return None, f"Couldn't scrape this job posting (the site may be blocking automated access)."
 
 
 def extract_resume_text(uploaded_file):
@@ -62,6 +74,9 @@ def extract_resume_text(uploaded_file):
     text = ""
     for page in reader.pages:
         text += page.extract_text() or ""
+        if len(text.strip()) < 50:
+            os.remove(temp_path)
+            raise ValueError("Couldn't extract text from this PDF. It may be a scanned image — please upload a text-based PDF instead.")
 
     # Save extracted text too (per requirements doc)
     with open("candidate_resume.txt", "w", encoding="utf-8") as f:
@@ -165,7 +180,17 @@ resume_file = st.file_uploader("Upload your Resume (PDF)", type=["pdf"])
 
 run_button = st.button("Generate Resume Improvement Plan")
 
+# Initialize session state (persists across reruns)
+if "job_text" not in st.session_state:
+    st.session_state.job_text = None
+if "awaiting_manual_job_text" not in st.session_state:
+    st.session_state.awaiting_manual_job_text = False
+
 if run_button:
+    # Reset state for a fresh run
+    st.session_state.job_text = None
+    st.session_state.awaiting_manual_job_text = False
+
     if not job_url or not resume_file:
         st.error("Please provide both a job URL and a resume PDF.")
     elif not is_valid_job_url(job_url):
@@ -175,35 +200,57 @@ if run_button:
     elif not gemini_api_key or not serper_api_key:
         st.error("Missing API key(s). Please add them in the sidebar or your .env file.")
     else:
-        try:
-            with st.spinner("Scraping job posting..."):
-                job_text = scrape_job_posting(job_url, serper_api_key)
+        with st.spinner("Scraping job posting..."):
+            job_text, scrape_error = scrape_job_posting(job_url, serper_api_key)
 
-            with st.spinner("Extracting resume text..."):
-                resume_text, temp_pdf_path = extract_resume_text(resume_file)
+        if scrape_error:
+            st.warning(f"⚠️ {scrape_error}")
+            st.session_state.awaiting_manual_job_text = True
+        else:
+            st.session_state.job_text = job_text
 
-            with st.spinner("Running AI agents... this may take a minute"):
-                crew = build_crew(
-                    job_text=job_text,
-                    resume_text=resume_text,
-                    model_name=model_choice,
-                    api_key=gemini_api_key,
-                )
-                result = crew.kickoff()
+# If scraping failed, show manual paste box (this stays visible across reruns)
+if st.session_state.awaiting_manual_job_text:
+    st.info("You can paste the job description manually below instead.")
+    manual_text = st.text_area("Paste job description here:", key="manual_job_input")
+    if st.button("Use this description"):
+        if manual_text.strip():
+            st.session_state.job_text = manual_text
+            st.session_state.awaiting_manual_job_text = False
+            st.rerun()
+        else:
+            st.error("Please paste some text first.")
 
-            st.success("Done! Here's your result:")
-            st.write(str(result))
+# Once we have job_text (either scraped or manually pasted), run the pipeline
+if st.session_state.job_text and resume_file:
+    try:
+        with st.spinner("Extracting resume text..."):
+            resume_text, temp_pdf_path = extract_resume_text(resume_file)
 
-            pdf_path = generate_pdf(str(result))
-            with open(pdf_path, "rb") as f:
-                st.download_button(
-                    "Download PDF Report",
-                    f,
-                    file_name="resume_improvement_plan.pdf",
-                )
+        with st.spinner("Running AI agents... this may take a minute"):
+            crew = build_crew(
+                job_text=st.session_state.job_text,
+                resume_text=resume_text,
+                model_name=model_choice,
+                api_key=gemini_api_key,
+            )
+            result = crew.kickoff()
 
-        except Exception as e:
-            st.error(f"Something went wrong: {e}")
+        st.success("Done! Here's your result:")
+        st.write(str(result))
 
-        finally:
-            cleanup_temp_files()
+        pdf_path = generate_pdf(str(result))
+        with open(pdf_path, "rb") as f:
+            st.download_button(
+                "Download PDF Report",
+                f,
+                file_name="resume_improvement_plan.pdf",
+            )
+
+        st.session_state.job_text = None  # reset so it doesn't re-run automatically
+
+    except Exception as e:
+        st.error(f"Something went wrong: {e}")
+
+    finally:
+        cleanup_temp_files()
