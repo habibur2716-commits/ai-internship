@@ -173,6 +173,15 @@ def generate_pdf(result_text, output_path="resume_improvement_plan.pdf"):
 
     pdf.output(output_path)
     return output_path
+
+def truncate_text(text, max_chars=12000, label="text"):
+    """Truncates very long text before sending to the AI, with a visible warning."""
+    if len(text) > max_chars:
+        st.warning(f"⚠️ The {label} was quite long, so it was trimmed to the first {max_chars} characters before processing.")
+        return text[:max_chars]
+    return text
+
+
 # ---------------- MAIN UI ----------------
 
 job_url = st.text_input("Job Posting URL")
@@ -226,6 +235,9 @@ if st.session_state.job_text and resume_file:
     try:
         with st.spinner("Extracting resume text..."):
             resume_text, temp_pdf_path = extract_resume_text(resume_file)
+
+        job_text = truncate_text(job_text, max_chars=12000, label="job description")
+        resume_text = truncate_text(resume_text, max_chars=12000, label="resume")
 
         with st.spinner("Running AI agents... this may take a minute"):
             crew = build_crew(
