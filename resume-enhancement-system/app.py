@@ -109,13 +109,12 @@ def cleanup_temp_files():
         if os.path.exists(fname):
             os.remove(fname)
 
-import re
 
 def sanitize_text(text):
+    """Cleans text but KEEPS markdown symbols (#, *, -) since we now parse them."""
     replacements = {
         "’": "'", "‘": "'", "“": '"', "”": '"',
-        "–": "-", "—": "-", "→": "->", "•": "-", "…": "...",
-        "*": "", "#": "",  # remove markdown symbols the AI adds
+        "–": "-", "—": "-", "→": "->", "…": "...",
     }
     for bad, good in replacements.items():
         text = text.replace(bad, good)
@@ -123,53 +122,93 @@ def sanitize_text(text):
     return text
 
 
-def wrap_line(pdf, line, max_width):
-    """Manually builds wrapped lines using actual character widths,
-    avoiding fpdf2's buggy internal multi_cell wrap algorithm."""
-    words = line.split(" ")
-    lines = []
-    current = ""
+def split_bold_segments(line):
+    """Splits a line into (text, is_bold) chunks based on **bold** markers."""
+    parts = re.split(r"(\*\*.*?\*\*)", line)
+    segments = []
+    for part in parts:
+        if part.startswith("**") and part.endswith("**") and len(part) > 4:
+            segments.append((part[2:-2], True))
+        elif part:
+            segments.append((part, False))
+    return segments
 
-    for word in words:
-        # break any single word that's wider than the page itself
-        while pdf.get_string_width(word) > max_width:
-            for i in range(len(word), 0, -1):
-                if pdf.get_string_width(word[:i]) <= max_width:
-                    lines.append(word[:i])
-                    word = word[i:]
-                    break
 
-        test = (current + " " + word).strip()
-        if pdf.get_string_width(test) <= max_width:
-            current = test
-        else:
-            if current:
-                lines.append(current)
-            current = word
+def print_wrapped(pdf, segments, base_size, max_width, line_height=7):
+    """Prints a list of (text, is_bold) segments, word-wrapping manually,
+    switching font style per word so bold text renders as real bold."""
+    x_start = pdf.l_margin
+    x = pdf.get_x()
 
-    if current:
-        lines.append(current)
-    return lines if lines else [""]
+    for text, is_bold in segments:
+        words = text.split(" ")
+        for i, word in enumerate(words):
+            if word == "" and i != len(words) - 1:
+                word = " "
+            style = "B" if is_bold else ""
+            pdf.set_font("Helvetica", style=style, size=base_size)
+            piece = word + (" " if i != len(words) - 1 else "")
+            piece_width = pdf.get_string_width(piece)
+
+            if x + piece_width > pdf.w - pdf.r_margin:
+                pdf.ln(line_height)
+                x = x_start
+                pdf.set_x(x_start)
+
+            pdf.cell(piece_width, line_height, piece)
+            x += piece_width
+
+    pdf.ln(line_height)
 
 
 def generate_pdf(result_text, output_path="resume_improvement_plan.pdf"):
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
-    pdf.set_font("Helvetica", size=11)
     pdf.set_left_margin(15)
     pdf.set_right_margin(15)
+    pdf.set_font("Helvetica", size=11)
 
     max_width = pdf.w - pdf.l_margin - pdf.r_margin
-
     clean_text = sanitize_text(result_text)
 
     for raw_line in clean_text.split("\n"):
-        if raw_line.strip() == "":
-            pdf.ln(4)
+        line = raw_line.strip()
+
+        if line == "":
+            pdf.ln(3)
             continue
-        for wrapped in wrap_line(pdf, raw_line, max_width):
-            pdf.cell(0, 8, wrapped, ln=1)
+
+        # Heading level 2: "## Heading"
+        if line.startswith("## "):
+            pdf.ln(2)
+            text = line[3:].strip()
+            print_wrapped(pdf, [(text, True)], base_size=15, max_width=max_width, line_height=9)
+            pdf.ln(1)
+            continue
+
+        # Heading level 3: "### Heading"
+        if line.startswith("### "):
+            pdf.ln(1)
+            text = line[4:].strip()
+            print_wrapped(pdf, [(text, True)], base_size=13, max_width=max_width, line_height=8)
+            continue
+
+        # Bullet point: "- text" or "1. text"
+        bullet_match = re.match(r"^(-|\d+\.)\s+(.*)", line)
+        if bullet_match:
+            bullet_text = bullet_match.group(2)
+            pdf.set_x(pdf.l_margin + 5)
+            pdf.set_font("Helvetica", size=11)
+            pdf.cell(5, 7, "-")
+            segments = split_bold_segments(bullet_text)
+            print_wrapped(pdf, segments, base_size=11, max_width=max_width - 10, line_height=7)
+            continue
+
+        # Normal paragraph line (may contain **bold** inline)
+        pdf.set_x(pdf.l_margin)
+        segments = split_bold_segments(line)
+        print_wrapped(pdf, segments, base_size=11, max_width=max_width, line_height=7)
 
     pdf.output(output_path)
     return output_path

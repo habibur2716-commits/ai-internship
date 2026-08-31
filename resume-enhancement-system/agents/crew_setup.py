@@ -9,7 +9,7 @@ def build_crew(job_text, resume_text, model_name="gemini-3.5-flash-lite", api_ke
     """
 
     fast_llm = LLM(model=f"gemini/{model_name}", api_key=api_key, temperature=0.3)
-    strong_llm = LLM(model="gemini/gemini-3.1-pro", api_key=api_key, temperature=0.3)
+    strong_llm = LLM(model="gemini/gemini-3.5-flash", api_key=api_key, temperature=0.3)
 
     # --- Agent 1: Skills Analyzer (fast model — straightforward extraction) ---
     skills_analyzer = Agent(
