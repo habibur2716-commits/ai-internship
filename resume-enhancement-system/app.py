@@ -19,11 +19,11 @@ st.title("📄 Resume Enhancement & Interview Prep System")
 st.sidebar.header("Settings")
 
 gemini_key_input = st.sidebar.text_input(
-    "Gemini API Key (optional override)", type="password"
+    "Gemini API Key (required)", type="password"
 )
 
 serper_key_input = st.sidebar.text_input(
-    "Serper API Key (optional override)", type="password"
+    "Serper API Key (required)", type="password"
 )
 
 model_choice = st.sidebar.selectbox(
@@ -32,8 +32,8 @@ model_choice = st.sidebar.selectbox(
 )
 
 # Use sidebar key if given, otherwise fallback to .env
-gemini_api_key = gemini_key_input or os.getenv("GEMINI_API_KEY")
-serper_api_key = serper_key_input or os.getenv("SERPER_API_KEY")
+gemini_api_key = gemini_key_input
+serper_api_key = serper_key_input
 
 
 # ---------------- HELPER FUNCTIONS ----------------
