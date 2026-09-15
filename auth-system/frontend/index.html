@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Auth System Portal</title>
+  <!-- Tailwind CSS & FontAwesome Icons -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col justify-between antialiased">
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- AUTH SECTION (LOGIN / SIGNUP) -->
+  <div id="authSection" class="flex-grow flex items-center justify-center p-4">
+    <div class="w-full max-w-4xl bg-slate-800 border border-slate-700/60 rounded-2xl shadow-2xl overflow-hidden grid grid-cols-1 md:grid-cols-2">
+      
+      <!-- Left Visual Banner -->
+      <div class="hidden md:flex flex-col justify-between p-8 bg-gradient-to-br from-indigo-600 via-purple-600 to-blue-700 text-white relative overflow-hidden">
+        <div class="absolute -bottom-10 -left-10 w-48 h-48 bg-white/10 rounded-full blur-2xl"></div>
+        <div class="relative z-10">
+          <div class="flex items-center gap-2 text-2xl font-bold tracking-wide">
+            <i class="fa-solid fa-shield-halved text-indigo-200"></i> AuthPulse
+          </div>
+          <p class="text-xs text-indigo-200 mt-1 font-medium">FastAPI & SQLModel Authentication Engine</p>
+        </div>
+        <div class="relative z-10 my-auto py-8">
+          <h3 class="text-2xl font-bold leading-tight">Secure Access & Identity Management</h3>
+          <p class="text-sm text-indigo-100 mt-2 opacity-90">JWT Token-based stateless authentication with password hashing and session refresh mechanism.</p>
+        </div>
+        <div class="relative z-10 text-xs text-indigo-200/80 flex items-center gap-4">
+          <span><i class="fa-solid fa-check text-green-300"></i> JWT Bearer</span>
+          <span><i class="fa-solid fa-check text-green-300"></i> Bcrypt Hashing</span>
+        </div>
+      </div>
+
+      <!-- Right Form Section -->
+      <div class="p-8 sm:p-10 flex flex-col justify-center bg-slate-800">
+        
+        <!-- LOGIN FORM -->
+        <div id="loginCard">
+          <div class="mb-6">
+            <h2 class="text-2xl font-bold text-white">Welcome Back</h2>
+            <p class="text-xs text-slate-400 mt-1">Enter your credentials to access your dashboard</p>
+          </div>
+
+          <form id="loginForm" class="space-y-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Email Address</label>
+              <div class="relative">
+                <i class="fa-regular fa-envelope absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                <input type="email" id="loginEmail" placeholder="you@example.com" required class="w-full bg-slate-900/80 border border-slate-700 text-slate-100 text-sm rounded-lg pl-9 pr-3 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition">
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Password</label>
+              <div class="relative">
+                <i class="fa-solid fa-lock absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                <input type="password" id="loginPassword" placeholder="••••••••" required class="w-full bg-slate-900/80 border border-slate-700 text-slate-100 text-sm rounded-lg pl-9 pr-10 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition">
+                <button type="button" onclick="togglePassword('loginPassword', this)" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 text-xs">
+                  <i class="fa-regular fa-eye"></i>
+                </button>
+              </div>
+            </div>
+
+            <button type="submit" id="loginBtn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2.5 rounded-lg text-sm transition shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2">
+              <span>Sign In</span>
+            </button>
+          </form>
+
+          <p class="text-xs text-center text-slate-400 mt-6">
+            Don't have an account? <a href="#" onclick="switchAuthMode('signup')" class="text-indigo-400 hover:underline font-semibold">Create account</a>
+          </p>
+        </div>
+
+        <!-- SIGNUP FORM -->
+        <div id="signupCard" class="hidden">
+          <div class="mb-6">
+            <h2 class="text-2xl font-bold text-white">Create Account</h2>
+            <p class="text-xs text-slate-400 mt-1">Register to start your authenticated session</p>
+          </div>
+
+          <form id="signupForm" class="space-y-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Full Name</label>
+              <div class="relative">
+                <i class="fa-regular fa-user absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                <input type="text" id="signupName" placeholder="Habib Ur Rehman" required class="w-full bg-slate-900/80 border border-slate-700 text-slate-100 text-sm rounded-lg pl-9 pr-3 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition">
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Email Address</label>
+              <div class="relative">
+                <i class="fa-regular fa-envelope absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                <input type="email" id="signupEmail" placeholder="you@example.com" required class="w-full bg-slate-900/80 border border-slate-700 text-slate-100 text-sm rounded-lg pl-9 pr-3 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition">
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Password</label>
+              <div class="relative">
+                <i class="fa-solid fa-lock absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                <input type="password" id="signupPassword" placeholder="••••••••" minlength="6" required class="w-full bg-slate-900/80 border border-slate-700 text-slate-100 text-sm rounded-lg pl-9 pr-10 py-2.5 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition">
+                <button type="button" onclick="togglePassword('signupPassword', this)" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 text-xs">
+                  <i class="fa-regular fa-eye"></i>
+                </button>
+              </div>
+            </div>
+
+            <button type="submit" id="signupBtn" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2.5 rounded-lg text-sm transition shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2">
+              <span>Register Account</span>
+            </button>
+          </form>
+
+          <p class="text-xs text-center text-slate-400 mt-6">
+            Already registered? <a href="#" onclick="switchAuthMode('login')" class="text-indigo-400 hover:underline font-semibold">Sign in here</a>
+          </p>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- DASHBOARD SECTION (PROTECTED VIEW) -->
+  <div id="dashboardSection" class="hidden min-h-screen flex flex-col bg-slate-950">
+    
+    <!-- Top Navbar -->
+    <header class="bg-slate-900 border-b border-slate-800 px-6 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold shadow-lg shadow-indigo-600/40">
+          <i class="fa-solid fa-shield-halved"></i>
+        </div>
+        <div>
+          <h1 class="text-base font-bold text-white tracking-wide">AuthPulse System</h1>
+          <p class="text-xs text-slate-400">Authenticated Session Active</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-4">
+        <div class="flex items-center gap-3 bg-slate-800 border border-slate-700 rounded-full px-3 py-1.5">
+          <div class="w-7 h-7 rounded-full bg-indigo-500 text-white flex items-center justify-center text-xs font-bold uppercase" id="navAvatar">U</div>
+          <span class="text-xs font-medium text-slate-200 pr-1" id="navName">User</span>
+        </div>
+        <button onclick="logout()" class="bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1.5">
+          <i class="fa-solid fa-right-from-bracket"></i> Logout
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Dashboard Content Area -->
+    <main class="flex-grow max-w-6xl w-full mx-auto p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+      
+      <!-- Profile Card -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 flex flex-col items-center text-center">
+        <div class="w-20 h-20 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 text-white text-2xl font-bold flex items-center justify-center shadow-xl mb-4 border-4 border-slate-800" id="dashAvatar">
+          U
+        </div>
+        <h3 class="text-lg font-bold text-white" id="dashName">User Name</h3>
+        <p class="text-xs text-indigo-400 font-medium mt-0.5" id="dashEmail">user@example.com</p>
+        
+        <div class="w-full border-t border-slate-800 my-4"></div>
+
+        <div class="w-full space-y-2 text-left">
+          <div class="flex justify-between items-center bg-slate-800/50 p-2.5 rounded-lg border border-slate-800">
+            <span class="text-xs text-slate-400">User ID</span>
+            <span class="text-xs font-semibold text-slate-200" id="dashId">#0</span>
+          </div>
+          <div class="flex justify-between items-center bg-slate-800/50 p-2.5 rounded-lg border border-slate-800">
+            <span class="text-xs text-slate-400">Account Status</span>
+            <span class="inline-flex items-center gap-1 text-xs font-medium text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Active
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Area: Password Change & Tokens Info -->
+      <div class="md:col-span-2 space-y-6">
+        
+        <!-- Change Password Box -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+          <div class="flex items-center gap-2 mb-4">
+            <i class="fa-solid fa-key text-indigo-400"></i>
+            <h3 class="text-sm font-bold text-white">Security & Password Update</h3>
+          </div>
+
+          <form id="changePasswordForm" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Current Password</label>
+              <input type="password" id="currentPassword" placeholder="••••••••" required class="w-full bg-slate-800 border border-slate-700 text-slate-100 text-xs rounded-lg p-2.5 focus:border-indigo-500 outline-none">
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">New Password</label>
+              <input type="password" id="newPassword" placeholder="••••••••" minlength="6" required class="w-full bg-slate-800 border border-slate-700 text-slate-100 text-xs rounded-lg p-2.5 focus:border-indigo-500 outline-none">
+            </div>
+
+            <div class="sm:col-span-2 flex justify-end">
+              <button type="submit" id="pwdBtn" class="bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-4 py-2 rounded-lg text-xs transition flex items-center gap-2">
+                <span>Update Password</span>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Token Information Viewer (Demonstration Card) -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2">
+              <i class="fa-solid fa-shield-virus text-emerald-400"></i>
+              <h3 class="text-sm font-bold text-white">Active Session Authorization Tokens</h3>
+            </div>
+            <span class="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded border border-slate-700">JWT Bearer</span>
+          </div>
+
+          <div class="space-y-3">
+            <div>
+              <span class="text-[11px] text-slate-400 block mb-1">Access Token (Stored in LocalStorage)</span>
+              <div class="bg-slate-950 p-2.5 rounded-lg border border-slate-800/80 font-mono text-[10px] text-indigo-300 truncate" id="tokenDisplay">
+                -
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- JAVASCRIPT INTEGRATION -->
+  <script>
+    const API_BASE = "http://127.0.0.1:8000";
+
+    // Toast Notification System
+    function showToast(message, type = "error") {
+      const container = document.getElementById("toastContainer");
+      const toast = document.createElement("div");
+      toast.className = `pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-lg text-xs font-medium border shadow-xl transition-all duration-300 transform translate-x-5 opacity-0 ${
+        type === "success" 
+          ? "bg-emerald-950/90 text-emerald-200 border-emerald-800" 
+          : "bg-rose-950/90 text-rose-200 border-rose-800"
+      }`;
+      
+      const icon = type === "success" ? "fa-circle-check text-emerald-400" : "fa-circle-exclamation text-rose-400";
+      toast.innerHTML = `<i class="fa-solid ${icon} text-base"></i><span>${message}</span>`;
+      
+      container.appendChild(toast);
+      
+      requestAnimationFrame(() => {
+        toast.classList.remove("translate-x-5", "opacity-0");
+      });
+
+      setTimeout(() => {
+        toast.classList.add("opacity-0", "translate-x-5");
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+
+    // Toggle Password Visibility
+    function togglePassword(inputId, btn) {
+      const input = document.getElementById(inputId);
+      const icon = btn.querySelector("i");
+      if (input.type === "password") {
+        input.type = "text";
+        icon.className = "fa-regular fa-eye-slash";
+      } else {
+        input.type = "password";
+        icon.className = "fa-regular fa-eye";
+      }
+    }
+
+    // Switch between Login & Signup Views
+    function switchAuthMode(mode) {
+      document.getElementById("loginCard").classList.toggle("hidden", mode !== "login");
+      document.getElementById("signupCard").classList.toggle("hidden", mode !== "signup");
+    }
+
+    // Loading State Helper
+    function setBtnLoading(btnId, isLoading, defaultText) {
+      const btn = document.getElementById(btnId);
+      if (isLoading) {
+        btn.disabled = true;
+        btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Processing...`;
+      } else {
+        btn.disabled = false;
+        btn.innerHTML = `<span>${defaultText}</span>`;
+      }
+    }
+
+    // 1. SIGNUP REQUEST
+    document.getElementById("signupForm").onsubmit = async (e) => {
+      e.preventDefault();
+      setBtnLoading("signupBtn", true, "Register Account");
+
+      try {
+        const response = await fetch(`${API_BASE}/signup`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: document.getElementById("signupName").value,
+            email: document.getElementById("signupEmail").value,
+            password: document.getElementById("signupPassword").value
+          })
+        });
+        const data = await response.json();
+        
+        if (response.ok) {
+          showToast("Account created successfully! Please sign in.", "success");
+          switchAuthMode("login");
+          document.getElementById("signupForm").reset();
+        } else {
+          showToast(data.detail || "Registration failed");
+        }
+      } catch (err) {
+        showToast("Cannot connect to backend server.");
+      } finally {
+        setBtnLoading("signupBtn", false, "Register Account");
+      }
+    };
+
+    // 2. LOGIN REQUEST
+    document.getElementById("loginForm").onsubmit = async (e) => {
+      e.preventDefault();
+      setBtnLoading("loginBtn", true, "Sign In");
+
+      try {
+        const response = await fetch(`${API_BASE}/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: document.getElementById("loginEmail").value,
+            password: document.getElementById("loginPassword").value
+          })
+        });
+        const data = await response.json();
+
+        if (response.ok) {
+          localStorage.setItem("access_token", data.access_token);
+          localStorage.setItem("refresh_token", data.refresh_token);
+          showToast("Signed in successfully!", "success");
+          loadDashboard();
+        } else {
+          showToast(data.detail || "Invalid email or password");
+        }
+      } catch (err) {
+        showToast("Backend server is unreachable.");
+      } finally {
+        setBtnLoading("loginBtn", false, "Sign In");
+      }
+    };
+
+    // 3. LOAD DASHBOARD DATA
+    async function loadDashboard() {
+      const token = localStorage.getItem("access_token");
+      if (!token) {
+        document.getElementById("authSection").classList.remove("hidden");
+        document.getElementById("dashboardSection").classList.add("hidden");
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE}/me`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          const user = await response.json();
+          const firstLetter = user.name ? user.name.charAt(0).toUpperCase() : "U";
+
+          document.getElementById("dashId").innerText = `#${user.id}`;
+          document.getElementById("dashName").innerText = user.name;
+          document.getElementById("dashEmail").innerText = user.email;
+          document.getElementById("dashAvatar").innerText = firstLetter;
+
+          document.getElementById("navName").innerText = user.name;
+          document.getElementById("navAvatar").innerText = firstLetter;
+
+          document.getElementById("tokenDisplay").innerText = token;
+
+          document.getElementById("authSection").classList.add("hidden");
+          document.getElementById("dashboardSection").classList.remove("hidden");
+        } else {
+          logout();
+        }
+      } catch (err) {
+        document.getElementById("authSection").classList.remove("hidden");
+        document.getElementById("dashboardSection").classList.add("hidden");
+      }
+    }
+
+    // 4. CHANGE PASSWORD REQUEST
+    document.getElementById("changePasswordForm").onsubmit = async (e) => {
+      e.preventDefault();
+      setBtnLoading("pwdBtn", true, "Update Password");
+      const token = localStorage.getItem("access_token");
+
+      try {
+        const response = await fetch(`${API_BASE}/change-password`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            current_password: document.getElementById("currentPassword").value,
+            new_password: document.getElementById("newPassword").value
+          })
+        });
+        const data = await response.json();
+
+        if (response.ok) {
+          showToast("Password updated successfully!", "success");
+          document.getElementById("changePasswordForm").reset();
+        } else {
+          showToast(data.detail || "Failed to update password");
+        }
+      } catch (err) {
+        showToast("Error processing request");
+      } finally {
+        setBtnLoading("pwdBtn", false, "Update Password");
+      }
+    };
+
+    // 5. LOGOUT REQUEST
+    async function logout() {
+      const refreshToken = localStorage.getItem("refresh_token");
+      if (refreshToken) {
+        try {
+          await fetch(`${API_BASE}/logout?refresh_token=${refreshToken}`, { method: "POST" });
+        } catch (e) {}
+      }
+      localStorage.clear();
+      document.getElementById("authSection").classList.remove("hidden");
+      document.getElementById("dashboardSection").classList.add("hidden");
+      switchAuthMode("login");
+      showToast("Logged out successfully", "success");
+    }
+
+    // Initial check on load
+    loadDashboard();
+  </script>
+</body>
+</html>
