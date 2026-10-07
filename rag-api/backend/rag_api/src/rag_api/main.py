@@ -20,22 +20,20 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# 1. Exact origins list
-origins = [
+allowed_origins = [
+    "https://ai-internship-r3djapc4f-habibhr112211-7505.vercel.app",  # <--- Exact browser domain
     "https://ai-internship-ivory.vercel.app",
-    "http://localhost:3000",
     "http://localhost:5173",
+    "http://localhost:3000",
     "http://127.0.0.1:5173",
 ]
 
-# 2. Add CORS Middleware RIGHT AFTER app creation
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["*"],
 )
 
 app.include_router(auth.router)
