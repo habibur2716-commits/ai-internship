@@ -20,21 +20,22 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# ===== CORS FIX HERE =====
-# Vite frontend port (5173) add kar diya hai
-allowed_origins = [
+# 1. Exact origins list
+origins = [
+    "https://ai-internship-ivory.vercel.app",
+    "http://localhost:3000",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "http://localhost:3000",
-    "https://ai-internship-ivory.vercel.app",  # Removed trailing slash /
 ]
 
+# 2. Add CORS Middleware RIGHT AFTER app creation
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,  # Yahan allowed_origins variable paas karein, "*" nahi!
+    allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 app.include_router(auth.router)
