@@ -26,13 +26,12 @@ allowed_origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:3000",
-    "https://ai-internship-ivory.vercel.app/",  # <--- Apna Vercel domain yahan add karein
-    "https://*.vercel.app",
+    "https://ai-internship-ivory.vercel.app",  # Removed trailing slash /
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=allowed_origins,  # Yahan allowed_origins variable paas karein, "*" nahi!
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
