@@ -26,10 +26,10 @@ conf = ConnectionConfig(
     MAIL_USERNAME=os.getenv("MAIL_USERNAME", "your_email@gmail.com"),
     MAIL_PASSWORD=os.getenv("MAIL_PASSWORD", "your_app_password"),
     MAIL_FROM=os.getenv("MAIL_FROM", "your_email@gmail.com"),
-    MAIL_PORT=int(os.getenv("MAIL_PORT", 587)),
+    MAIL_PORT=int(os.getenv("MAIL_PORT", 465)),  # 587 ki jagah 465
     MAIL_SERVER=os.getenv("MAIL_SERVER", "smtp.gmail.com"),
-    MAIL_STARTTLS=True,
-    MAIL_SSL_TLS=False,
+    MAIL_STARTTLS=False,                         # True ki jagah False
+    MAIL_SSL_TLS=True,                           # False ki jagah True
     USE_CREDENTIALS=True,
     VALIDATE_CERTS=True
 )
