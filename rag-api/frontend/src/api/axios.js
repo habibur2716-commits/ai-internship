@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // FastAPI backend ka URL
 const API = axios.create({
-  baseURL: 'http://127.0.0.1:8000',
+  baseURL: 'https://ai-internship-production.up.railway.app', // Yahan Railway wala domain paste karein
 });
 
 // 1. Har request ke sath JWT token include karne ke liye
