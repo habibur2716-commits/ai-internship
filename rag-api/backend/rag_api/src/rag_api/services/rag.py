@@ -31,7 +31,7 @@ def clean_text(text: str) -> str:
     text = re.sub(r'\s+', ' ', text)
     return text.strip()
 
-def chunk_and_store(text: str, source_name: str, user_id: int) -> int:
+def chunk_and_store(text: str, source_name: str, user_id: int, session_id: int) -> int:
     splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=80)
     chunks = splitter.split_text(text)
 
@@ -41,27 +41,27 @@ def chunk_and_store(text: str, source_name: str, user_id: int) -> int:
     embeddings_model = get_embeddings_model()
     embeddings = []
 
-    # One-by-one with delay (jaisa aapne purani app mein kiya tha)
     for chunk in chunks:
-        # embed_query single chunk handle karta hai baghair API par pressure dale
         emb = embeddings_model.embed_query(chunk)
         embeddings.append(emb)
-        time.sleep(0.7)  # Rates ko limit ke andar rakhne ke liye pause
+        time.sleep(0.7)  # Pause to respect rate limits
 
     vectors = []
     for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
         vectors.append({
-            "id": f"{user_id}_{source_name}_chunk_{i}",
+            "id": f"{user_id}_{session_id}_{source_name}_chunk_{i}",
             "values": embedding,
             "metadata": {
                 "source": source_name,
                 "chunk_index": i,
-                "user_id": user_id,
+                "user_id": str(user_id),
+                "session_id": str(session_id),  # Chat Session Isolation
                 "text": chunk
             }
         })
 
     index.upsert(vectors=vectors, namespace=f"user_{user_id}")
+    print(f"✅ Upserted {len(chunks)} chunks to namespace: user_{user_id} for session: {session_id}")
     return len(chunks)
 
 def extract_text_from_pdf(file_bytes: bytes) -> str:
@@ -103,28 +103,39 @@ def extract_youtube_transcript(url: str) -> str:
     text = " ".join([entry["text"] for entry in transcript_list])
     return clean_text(text)
 
-def retrieve_chunks(question: str, user_id: int, n_results: int = 4, min_score: float = 0.65):
+def retrieve_chunks(question: str, user_id: int, session_id: int, n_results: int = 5, min_score: float = 0.35):
     embeddings_model = get_embeddings_model()
     query_embedding = embeddings_model.embed_query(question)
+
+    # Filter strictly by session_id
+    filter_query = {"session_id": {"$eq": str(session_id)}}
 
     results = index.query(
         vector=query_embedding,
         top_k=n_results,
         namespace=f"user_{user_id}",
+        filter=filter_query,
         include_metadata=True
     )
 
-    if not results.get("matches"):
+    matches = getattr(results, "matches", []) or results.get("matches", [])
+    
+    print(f"\n--- RAG RETRIEVAL DEBUG ---")
+    print(f"Namespace: user_{user_id} | Session: {session_id} | Matches found in Pinecone: {len(matches)}")
+
+    if not matches:
         return [], []
 
     texts = []
     sources = []
 
-    # Strict similarity score filter
-    for match in results["matches"]:
-        score = match.get("score", 0.0)
+    for match in matches:
+        score = match.score if hasattr(match, 'score') else match.get("score", 0.0)
+        metadata = match.metadata if hasattr(match, 'metadata') else match.get("metadata", {})
+        
+        print(f"Chunk Score: {score:.4f} | Source: {metadata.get('source')}")
+
         if score >= min_score:
-            metadata = match.get("metadata", {})
             text = metadata.get("text")
             source = metadata.get("source") or metadata.get("source_name")
             
@@ -134,7 +145,7 @@ def retrieve_chunks(question: str, user_id: int, n_results: int = 4, min_score: 
                 sources.append(source)
 
     unique_sources = list(set(sources))
-
+    print(f"Accepted Chunks: {len(texts)} / {len(matches)}")
     return texts, unique_sources
 
 def delete_doc_chunks(source_name: str, user_id: int):
@@ -143,5 +154,6 @@ def delete_doc_chunks(source_name: str, user_id: int):
             filter={"source": {"$eq": source_name}},
             namespace=f"user_{user_id}"
         )
+        print(f"Deleted chunks for source '{source_name}' in namespace user_{user_id}")
     except Exception as e:
         print(f"Error deleting chunks from Pinecone: {e}")

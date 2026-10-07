@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 # ===== AUTH SCHEMAS =====
@@ -52,12 +52,40 @@ class URLRequest(BaseModel):
 class YouTubeRequest(BaseModel):
     url: str
 
-# ===== CHAT SCHEMAS =====
+# ===== CHAT SESSION & HISTORY SCHEMAS (NEWLY ADDED) =====
+
+class ChatUpdateTitle(BaseModel):
+    title: str
+
+class MessageResponse(BaseModel):
+    id: int
+    session_id: int
+    sender: str  # "user" or "assistant"
+    content: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class ChatSessionResponse(BaseModel):
+    id: int
+    user_id: int
+    title: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# ===== UPDATED CHAT REQUEST/RESPONSE =====
+
 class ChatRequest(BaseModel):
     question: str
+    session_id: int  # Link query to active chat session
     enable_web_search: bool = False
 
 class ChatResponse(BaseModel):
     answer: str
-    doc_sources: list[str] = []
-    web_sources: list[str] = []
+    session_id: int
+    doc_sources: List[str] = []
+    web_sources: List[str] = []

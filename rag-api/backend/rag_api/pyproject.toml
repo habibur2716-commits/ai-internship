@@ -26,6 +26,9 @@ dependencies = [
     "chromadb (>=1.5.9,<2.0.0)",
     "google-genai (>=2.23.0,<3.0.0)",
     "pinecone (>=10.0.0,<11.0.0)",
+    "fastapi-mail (>=1.6.8,<2.0.0)",
+    "langgraph (>=1.2.13,<2.0.0)",
+    "langchain-core (>=1.6.6,<2.0.0)",
 ]
 
 [tool.poetry]

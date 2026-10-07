@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlmodel import Session, select
 from ..database import get_session
 from ..models import User, Document
@@ -11,6 +11,7 @@ router = APIRouter(prefix="/documents", tags=["Documents"])
 @router.post("/upload-pdf", response_model=DocumentResponse, status_code=201)
 def upload_pdf(
     file: UploadFile = File(...),
+    session_id: int = Form(...),
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session)
 ):
@@ -24,7 +25,7 @@ def upload_pdf(
         if len(text) < 50:
             raise HTTPException(status_code=400, detail="PDF text too short or empty")
         
-        chunks_count = rag.chunk_and_store(text, file.filename, current_user.id)
+        chunks_count = rag.chunk_and_store(text, file.filename, current_user.id, session_id)
         
         doc = Document(
             user_id=current_user.id,
@@ -43,12 +44,13 @@ def upload_pdf(
 @router.post("/process-url", response_model=DocumentResponse, status_code=201)
 def process_url(
     data: URLRequest,
+    session_id: int,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session)
 ):
     try:
         text = rag.extract_text_from_url(data.url)
-        chunks_count = rag.chunk_and_store(text, data.url, current_user.id)
+        chunks_count = rag.chunk_and_store(text, data.url, current_user.id, session_id)
         
         doc = Document(
             user_id=current_user.id,
@@ -67,12 +69,13 @@ def process_url(
 @router.post("/process-youtube", response_model=DocumentResponse, status_code=201)
 def process_youtube(
     data: YouTubeRequest,
+    session_id: int,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session)
 ):
     try:
         text = rag.extract_youtube_transcript(data.url)
-        chunks_count = rag.chunk_and_store(text, data.url, current_user.id)
+        chunks_count = rag.chunk_and_store(text, data.url, current_user.id, session_id)
         
         doc = Document(
             user_id=current_user.id,
@@ -110,7 +113,6 @@ def delete_document(
     if doc.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
 
-    # Delete chunks from Vector DB (ChromaDB)
     rag.delete_doc_chunks(source_name=doc.source_name, user_id=current_user.id)
 
     session.delete(doc)
