@@ -1,11 +1,11 @@
 import random
 import os
+import resend
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlmodel import Session, select, desc
 from pydantic import BaseModel, EmailStr
-from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
 
 from ..database import get_session
 from ..models import User, RefreshToken, OTPCode
@@ -21,18 +21,8 @@ from ..auth import (
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
-# Email Config (SMTP Settings .env se le raha hai)
-conf = ConnectionConfig(
-    MAIL_USERNAME=os.getenv("MAIL_USERNAME", "your_email@gmail.com"),
-    MAIL_PASSWORD=os.getenv("MAIL_PASSWORD", "your_app_password"),
-    MAIL_FROM=os.getenv("MAIL_FROM", "your_email@gmail.com"),
-    MAIL_PORT=int(os.getenv("MAIL_PORT", 465)),  # 587 ki jagah 465
-    MAIL_SERVER=os.getenv("MAIL_SERVER", "smtp.gmail.com"),
-    MAIL_STARTTLS=False,                         # True ki jagah False
-    MAIL_SSL_TLS=True,                           # False ki jagah True
-    USE_CREDENTIALS=True,
-    VALIDATE_CERTS=True
-)
+# Resend API Key setup from environment variables
+resend.api_key = os.getenv("RESEND_API_KEY")
 
 # Schemas for OTP Operations
 class RefreshRequest(BaseModel):
@@ -64,17 +54,23 @@ def get_current_user(
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
-# Helper function to send email via background task
+# Helper function to send email via Resend API
 def send_otp_email_task(email: str, otp: str):
-    message = MessageSchema(
-        subject="Your Verification Code",
-        recipients=[email],
-        body=f"Your OTP Code is: {otp}. It will expire in 10 minutes.",
-        subtype=MessageType.plain
-    )
-    fm = FastMail(conf)
-    import asyncio
-    asyncio.run(fm.send_message(message))
+    try:
+        resend.Emails.send({
+            "from": "onboarding@resend.dev",  # Resend's default sender address
+            "to": email,
+            "subject": "Your RAG AI OTP Code",
+            "html": f"""
+                <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+                    <h2>Your Verification Code</h2>
+                    <p>Your OTP Code is: <strong style="font-size: 24px; color: #4F46E5;">{otp}</strong></p>
+                    <p>It will expire in 10 minutes.</p>
+                </div>
+            """
+        })
+    except Exception as e:
+        print(f"Error sending OTP email via Resend: {e}")
 
 # ==================== OTP ENDPOINTS ====================
 
@@ -106,7 +102,7 @@ def send_otp(
     session.add(otp_record)
     session.commit()
 
-    # Send Email asynchronously
+    # Send Email asynchronously via Resend
     background_tasks.add_task(send_otp_email_task, clean_email, otp_str)
 
     return {"message": "OTP has been sent to your email."}
