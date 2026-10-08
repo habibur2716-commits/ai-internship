@@ -1,18 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import API from '../api/axios'; // Direct API instance use karein
+import API from '../api/axios';
 
-const Sidebar = ({ currentSessionId, onSelectSession, onNewChat, token, onLogout, refreshTrigger }) => {
+const Sidebar = ({ currentSessionId, onSelectSession, onNewChat, token, onLogout, refreshTrigger, onCloseMobile }) => {
   const [sessions, setSessions] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [newTitle, setNewTitle] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Headers config helper
   const getAuthConfig = () => ({
     headers: { Authorization: `Bearer ${token}` }
   });
 
-  // Fetch all chat sessions for logged-in user
   const fetchSessions = async () => {
     if (!token) return;
     try {
@@ -29,7 +27,6 @@ const Sidebar = ({ currentSessionId, onSelectSession, onNewChat, token, onLogout
     }
   }, [token, refreshTrigger]);
 
-  // Create New Chat
   const handleCreateNewChat = async () => {
     setLoading(true);
     try {
@@ -43,7 +40,6 @@ const Sidebar = ({ currentSessionId, onSelectSession, onNewChat, token, onLogout
     }
   };
 
-  // Rename Session
   const handleRename = async (id) => {
     if (!newTitle.trim()) {
       setEditingId(null);
@@ -58,7 +54,6 @@ const Sidebar = ({ currentSessionId, onSelectSession, onNewChat, token, onLogout
     }
   };
 
-  // Delete Session
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this chat?')) return;
     try {
@@ -73,16 +68,27 @@ const Sidebar = ({ currentSessionId, onSelectSession, onNewChat, token, onLogout
   };
 
   return (
-    <div className="w-64 h-screen bg-slate-950/80 backdrop-blur-2xl text-slate-200 flex flex-col p-4 border-r border-slate-800/80 shadow-2xl">
+    <div className="w-72 md:w-64 h-screen bg-slate-950 text-slate-200 flex flex-col p-4 border-r border-slate-800/80 shadow-2xl">
       {/* Header / Brand */}
-      <div className="mb-6 px-2 flex items-center gap-3">
-        <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/30">
-          ⚡
+      <div className="mb-6 px-2 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/30">
+            ⚡
+          </div>
+          <div>
+            <h1 className="text-base font-bold tracking-wide text-white">RAG Chatbot</h1>
+            <p className="text-[10px] text-indigo-400 font-medium">AI Document Intelligence</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-base font-bold tracking-wide text-white">RAG Chatbot</h1>
-          <p className="text-[10px] text-indigo-400 font-medium">AI Document Intelligence</p>
-        </div>
+        {/* Mobile Close Button */}
+        {onCloseMobile && (
+          <button 
+            onClick={onCloseMobile}
+            className="md:hidden p-1 text-slate-400 hover:text-white text-lg font-bold"
+          >
+            ✕
+          </button>
+        )}
       </div>
 
       {/* New Chat Button */}
@@ -130,11 +136,11 @@ const Sidebar = ({ currentSessionId, onSelectSession, onNewChat, token, onLogout
                     autoFocus
                   />
                 ) : (
-                  <span className="truncate text-xs w-36">{session.title || 'Untitled Chat'}</span>
+                  <span className="truncate text-xs w-40 md:w-36">{session.title || 'Untitled Chat'}</span>
                 )}
 
-                {/* Rename & Delete Actions */}
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                {/* Actions */}
+                <div className="flex items-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
